@@ -9,4 +9,38 @@
 .dot { position: absolute; width: 52px; height: 52px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: bold; font-size: 19px; transition: all 0.2s; box-shadow: 0 4px 15px rgba(0,0,0,0.4); }
 .dot:active, .active { transform: scale(1.4); box-shadow: 0 0 40px currentColor; z-index: 10; }
 .newrecord { color: #ffd700; font-size: 32px; animation: pulse 1s infinite; margin: 20px 0; }
+
 @keyframes pulse { 0%,100% { transform: scale(1); } 50% { transform: scale(1.15); } }
+.leaderboard-mini {
+  margin: 20px 0;
+  padding: 15px;
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 12px;
+  backdrop-filter: blur(10px);
+}
+
+.leaderboard-mini h3 {
+  margin: 0 0 12px 0;
+  font-size: 18px;
+  color: #ffd700;
+}
+
+.lb-row {
+  display: flex;
+  justify-content: space-between;
+  padding: 6px 0;
+  font-size: 15px;
+}
+
+.sent {
+  margin-top: 15px;
+  color: #00ff00;
+  font-weight: bold;
+  animation: pulse 1s;
+}
+
+@keyframes pulse {
+  0% { opacity: 0.6; }
+  50% { opacity: 1; }
+  100% { opacity: 0.6; }
+}
