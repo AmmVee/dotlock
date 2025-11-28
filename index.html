@@ -1,13 +1,123 @@
 <!DOCTYPE html>
 <html lang="ru">
-  <head>
-    <meta charset="UTF-8" />
-    <link rel="icon" type="image/svg+xml" href="/vite.svg" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
-    <title>DotLock</title>
-    <script src="https://telegram.org/js/telegram-web-app.js"></script>
-  </head>
-  <body>
-    <div id="root"></div>
-  </body>
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>DotLock</title>
+  <script src="https://telegram.org/js/telegram-web-app.js"></script>
+  <style>
+    *{margin:0;padding:0;box-sizing:border-box}
+    body{background:#0a0a15;color:#fff;font-family:system-ui,sans-serif;overflow:hidden;touch-action:manipulation;-webkit-tap-highlight-color:transparent}
+    .app{padding:env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left)}
+    .header{display:flex;justify-content:space-between;padding:15px 20px;font-size:20px;font-weight:bold;background:rgba(0,0,0,0.4);border-radius:16px;margin:8px 8px 0}
+    .menu{text-align:center;padding-top:100px}
+    .menu h1{font-size:60px;background:linear-gradient(45deg,#ff6b6b,#4ecdc4);-webkit-background-clip:text;color:transparent;margin-bottom:20px}
+    .play{background:linear-gradient(45deg,#4ecdc4,#45b7d1);border:none;padding:18px 50px;font-size:26px;font-weight:bold;border-radius:50px;margin:40px 0;cursor:pointer}
+    .field{position:relative;width:360px;height:540px;margin:20px auto;background:rgba(0,0,0,0.3);border-radius:20px;overflow:hidden}
+    .dot{position:absolute;width:52px;height:52px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:bold;font-size:19px;transition:all .2s;box-shadow:0 4px 15px rgba(0,0,0,0.4);cursor:pointer}
+    .dot:active,.active{transform:scale(1.5);box-shadow:0 0 40px currentColor;z-index:10}
+    .newrecord{color:#ffd700;font-size:32px;animation:pulse 1s infinite;margin:20px}
+    @keyframes pulse{0%,100%{transform:scale(1)}50%{transform:scale(1.15)}}
+  </style>
+</head>
+<body>
+  <div class="app">
+    <div class="header">
+      <div id="score">Score: 0</div>
+      <div id="timer">60s</div>
+      <div id="combo">x1.0</div>
+    </div>
+
+    <div id="menu" class="menu">
+      <h1>DOTLOCK</h1>
+      <p style="font-size:24px;margin:20px 0;opacity:0.9" id="record">Рекорд: 0</p>
+      <button class="play" onclick="startGame()">ИГРАТЬ</button>
+    </div>
+
+    <div id="field" class="field" style="display:none"></div>
+
+    <div id="gameover" class="menu" style="display:none">
+      <h2>Время вышло!</h2>
+      <h1 id="finalscore">0 очков</h1>
+      <div class="newrecord" id="newrecord" style="display:none">НОВЫЙ РЕКОРД!</div>
+      <button class="play" onclick="startGame()">ИГРАТЬ СНОВА</button>
+    </div>
+  </div>
+
+  <script>
+    const COLORS=['#FF6B6B','#4ECDC4','#45B7D1','#F7B731','#9B59B6','#E74C3C'],W=6,H=9;
+    let points=[],path=[],score=0,combo=1,timeLeft=60,highScore=localStorage.getItem('dlhs')||0;
+    const tg=window.Telegram?.WebApp||{HapticFeedback:{impactOccurred:()=>{},notificationOccurred:()=>{}}};
+    tg.ready?.();tg.expand?.();
+    document.getElementById('record').textContent='Рекорд: '+highScore;
+
+    function rnd(n){return Math.floor(Math.random()*n)}
+    function generatePoints(){
+      points=[];const used={};
+      for(let i=0;i<60;i++){
+        const col=COLORS[rnd(COLORS.length)];used[col]=(used[col]||0)+1;
+        if(used[col]>9)continue;
+        let x,y;
+        do{x=rnd(W);y=rnd(H)}while(points.some(p=>p.x===x&&p.y===y));
+        points.push({x,y,color:col,number:used[col],id:Date.now()+i});
+      }
+    }
+
+    function startGame(){
+      generatePoints();score=0;combo=1;timeLeft=60;path=[];
+      document.getElementById('menu').style.display='none';
+      document.getElementById('gameover').style.display='none';
+      document.getElementById('field').style.display='block';
+      document.getElementById('score').textContent='Score: 0';
+      document.getElementById('combo').textContent='x1.0';
+      render();
+
+      const timer=setInterval(()=>{
+        timeLeft--;document.getElementById('timer').textContent=timeLeft+'s';
+        document.getElementById('timer').style.color=timeLeft<=10?'#ff3b30':'#ffd700';
+        if(timeLeft<=0){clearInterval(timer);endGame();}
+      },1000);
+    }
+
+    function render(){
+      const f=document.getElementById('field');f.innerHTML='';
+      points.forEach(p=>{
+        const d=document.createElement('div');
+        d.className='dot'+(path.includes(p)?' active':'');
+        d.style.cssText=`background:${p.color};left:${p.x*58+10}px;top:${p.y*58+10}px`;
+        d.textContent=p.number;
+        d.onclick=()=>handle(p);
+        f.appendChild(d);
+      });
+    }
+
+    function handle(p){
+      const last=path[path.length-1];
+      if(!last|| (p.color===last.color && p.number===last.number+1)){
+        path.push(p);tg.HapticFeedback.impactOccurred('light');render();
+        if(p.number>=7){
+          const len=path.length;
+          score+=Math.floor(len*len*combo*13);
+          combo+=0.4;
+          document.getElementById('score').textContent='Score: '+score.toLocaleString();
+          document.getElementById('combo').textContent='x'+combo.toFixed(1);
+          points=points.filter(x=>!path.includes(x));
+          path=[];
+          setTimeout(()=>{generatePoints();render();},350);
+        }
+      }
+    }
+
+    function endGame(){
+      document.getElementById('field').style.display='none';
+      document.getElementById('gameover').style.display='block';
+      document.getElementById('finalscore').textContent=score.toLocaleString()+' очков';
+      if(score>highScore){
+        highScore=score;localStorage.setItem('dlhs',score);
+        document.getElementById('newrecord').style.display='block';
+        tg.HapticFeedback.notificationOccurred('success');
+      }
+    }
+  </script>
+</body>
 </html>
