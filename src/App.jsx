@@ -5,6 +5,9 @@ const COLORS = ['#FF6B6B', '#4ECDC4', '#45B7D1', '#F7B731', '#9B59B6', '#E74C3C'
 const GRID_W = 6;
 const GRID_H = 9;
 
+const tg = window.Telegram?.WebApp;
+const sb = window.sb; // Supabase клиент из index.html
+
 export default function App() {
   const [points, setPoints] = useState([]);
   const [path, setPath] = useState([]);
@@ -13,13 +16,50 @@ export default function App() {
   const [timeLeft, setTimeLeft] = useState(60);
   const [gameState, setGameState] = useState('ready');
   const [highScore, setHighScore] = useState(0);
+  const [leaderboard, setLeaderboard] = useState([]);
+  const [isLoading, setIsLoading] = useState(false);
 
-  const tg = window.Telegram?.WebApp;
-  useEffect(() => { tg?.ready(); tg?.expand(); }, []);
-
+  // Загружаем личный рекорд и топ-10 при старте
   useEffect(() => {
-    const saved = localStorage.getItem('dotlock_hs');
-    if (saved) setHighScore(parseInt(saved));
+    tg?.ready();
+    tg?.expand();
+
+    if (!tg?.initDataUnsafe?.user) return;
+
+    const userId = tg.initDataUnsafe.user.id;
+
+    const loadData = async () => {
+      setIsLoading(true);
+
+      // Личный рекорд
+      const { data: personal } = await sb
+        .from('leaderboard')
+        .select('score')
+        .eq('user_id', userId)
+        .order('score', { ascending: false })
+        .limit(1);
+
+      if (personal?.[0]?.score) {
+        const best = personal[0].score;
+        setHighScore(best);
+        localStorage.setItem('dotlock_hs', best);
+      } else {
+        const saved = localStorage.getItem('dotlock_hs');
+        if (saved) setHighScore(parseInt(saved));
+      }
+
+      // Глобальный топ-10
+      const { data: top } = await sb
+        .from('leaderboard')
+        .select('score, username, first_name')
+        .order('score', { ascending: false })
+        .limit(10);
+
+      setLeaderboard(top || []);
+      setIsLoading(false);
+    };
+
+    loadData();
   }, []);
 
   const generatePoints = () => {
@@ -43,6 +83,31 @@ export default function App() {
     setPoints(newPoints.filter(p => p.number <= 9));
   };
 
+  const sendToLeaderboard = async () => {
+    if (!tg?.initDataUnsafe?.user || score <= highScore) return;
+
+    const user = tg.initDataUnsafe.user;
+
+    await sb.from('leaderboard').insert({
+      user_id: user.id,
+      username: user.username || null,
+      first_name: user.first_name || user.username || 'Player',
+      score: score
+    });
+
+    setHighScore(score);
+    localStorage.setItem('dotlock_hs', score);
+
+    // Обновляем топ-10
+    const { data } = await sb
+      .from('leaderboard')
+      .select('score, username, first_name')
+      .order('score', { ascending: false })
+      .limit(10);
+
+    setLeaderboard(data || []);
+  };
+
   const startGame = () => {
     generatePoints();
     setScore(0);
@@ -51,14 +116,15 @@ export default function App() {
     setPath([]);
     setGameState('playing');
 
-    const timer = setInterval GameOver => {
+    const timer = setInterval(() => {
       setTimeLeft(t => {
         if (t <= 1) {
           clearInterval(timer);
           setGameState('gameover');
+
+          // Автоматическая отправка при новом рекорде
           if (score > highScore) {
-            setHighScore(score);
-            localStorage.setItem('dotlock_hs', score);
+            sendToLeaderboard();
             tg?.HapticFeedback.notificationOccurred('success');
           }
           return 0;
@@ -76,7 +142,6 @@ export default function App() {
       setPath([...path, point]);
       tg?.HapticFeedback.impactOccurred('light');
 
-      // Завершение цепочки
       if (point.number >= 7) {
         const length = path.length + 1;
         const earned = Math.floor(length * length * combo * 13);
@@ -94,7 +159,7 @@ export default function App() {
     <div className="app">
       <div className="header">
         <div>Score: {score.toLocaleString()}</div>
-        <div style={{color: timeLeft <= 10 ? '#ff3b30' : '#ffd700'}}>{timeLeft}s</div>
+        <div style={{ color: timeLeft <= 10 ? '#ff3b30' : '#ffd700' }}>{timeLeft}s</div>
         <div>x{combo.toFixed(1)}</div>
       </div>
 
@@ -102,6 +167,19 @@ export default function App() {
         <div className="menu">
           <h1>DOTLOCK</h1>
           <p className="record">Рекорд: {highScore.toLocaleString()}</p>
+          
+          {leaderboard.length > 0 && (
+            <div className="leaderboard-mini">
+              <h3>Топ-10 игроков</h3>
+              {leaderboard.map((entry, i) => (
+                <div key={i} className="lb-row">
+                  <span>{i + 1}. {entry.username || entry.first_name || 'Player'}</span>
+                  <span>{entry.score.toLocaleString()}</span>
+                </div>
+              ))}
+            </div>
+          )}
+
           <button onClick={startGame} className="play">ИГРАТЬ</button>
           <p className="rules">Соединяй точки одного цвета по порядку 1→2→3...<br/>Чем длиннее цепь — тем больше очков!</p>
         </div>
@@ -126,7 +204,22 @@ export default function App() {
         <div className="menu">
           <h2>Время вышло!</h2>
           <h1>{score.toLocaleString()} очков</h1>
+          
           {score > highScore && <div className="newrecord">НОВЫЙ РЕКОРД!</div>}
+          {score > highScore && <div className="sent">Отправлено в таблицу лидеров!</div>}
+
+          {leaderboard.length > 0 && (
+            <div className="leaderboard-mini">
+              <h3>Текущий топ-10</h3>
+              {leaderboard.map((entry, i) => (
+                <div key={i} className="lb-row">
+                  <span>{i + 1}. {entry.username || entry.first_name || 'Player'}</span>
+                  <span>{entry.score.toLocaleString()}</span>
+                </div>
+              ))}
+            </div>
+          )}
+
           <button onClick={startGame} className="play">ИГРАТЬ СНОВА</button>
         </div>
       )}
