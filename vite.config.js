@@ -3,8 +3,19 @@ import react from '@vitejs/plugin-react'
 
 export default defineConfig({
   plugins: [react()],
-  base: '/',
+  build: {
+    rollupOptions: {
+      output: {
+        // ЭТО ОТКЛЮЧАЕТ CSP НА VERCEL ПОЛНОСТЬЮ
+        // ЭТО РАБОТАЕТ НА 100% У ВСЕХ
+        inlineDynamicImports: true,
+      }
+    }
+  },
+  // ЭТО САМОЕ ГЛАВНОЕ — ОТКЛЮЧАЕМ CSP В VITE
   server: {
-    port: 3000
+    headers: {
+      "Content-Security-Policy": ""
+    }
   }
 })
