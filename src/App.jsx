@@ -1,4 +1,5 @@
 import { useEffect, useState, useRef } from 'react'
+import { sb } from './supabase.js'
 
 const SKINS = {
   classic: { name: "Классика", price: 0, colors: ['#FF6B6B','#4ECDC4','#45B7D1','#F7B731','#9B59B6','#E74C3C'] },
@@ -17,7 +18,7 @@ export default function App() {
   const [score, setScore] = useState(0)
   const [combo, setCombo] = useState(1)
   const [timeLeft, setTimeLeft] = useState(60)
-  const [gameState, setGameState] = useState('menu') // menu, playing, gameover, shop, top
+  const [gameState, setGameState] = useState('menu')
   const [highScore, setHighScore] = useState(0)
   const [coins, setCoins] = useState(0)
   const [currentSkin, setCurrentSkin] = useState('classic')
@@ -25,9 +26,7 @@ export default function App() {
   const [top, setTop] = useState([])
 
   const tg = window.Telegram?.WebApp
-  const sb = window.supabaseClient
   const user = tg?.initDataUnsafe?.user
-
   const timerRef = useRef(null)
 
   useEffect(() => {
@@ -36,8 +35,7 @@ export default function App() {
   }, [user])
 
   const loadAllData = async () => {
-    if (!user || !sb) return
-
+    if (!user) return
     const { data } = await sb.from('leaderboard')
       .select('score, coins, skin, owned_skins')
       .eq('user_id', user.id)
@@ -53,7 +51,7 @@ export default function App() {
   }
 
   const saveData = async (updates) => {
-    if (!user || !sb) return
+    if (!user) return
     await sb.from('leaderboard').upsert({
       user_id: user.id,
       username: user.username || 'Player',
@@ -62,22 +60,21 @@ export default function App() {
     }).catch(() => {})
   }
 
-  const buySkin = async (skinKey) => {
-    const skin = SKINS[skinKey]
-    if (ownedSkins.includes(skinKey)) {
-      setCurrentSkin(skinKey)
-      await saveData({ skin: skinKey })
+  const buySkin = async (key) => {
+    const skin = SKINS[key]
+    if (ownedSkins.includes(key)) {
+      setCurrentSkin(key)
+      await saveData({ skin: key })
       return
     }
     if (coins < skin.price) return
 
     const newCoins = coins - skin.price
-    const newOwned = [...ownedSkins, skinKey]
+    const newOwned = [...ownedSkins, key]
     setCoins(newCoins)
     setOwnedSkins(newOwned)
-    setCurrentSkin(skinKey)
-    await saveData({ coins: newCoins, skin: skinKey, owned_skins: JSON.stringify(newOwned) })
-    tg?.HapticFeedback?.notificationOccurred('success')
+    setCurrentSkin(key)
+    await saveData({ coins: newCoins, skin: key, owned_skins: JSON.stringify(newOwned) })
   }
 
   const generatePoints = () => {
@@ -95,11 +92,7 @@ export default function App() {
   }
 
   const startGame = () => {
-    setScore(0)
-    setCombo(1)
-    setTimeLeft(60)
-    setPath([])
-    setGameState('playing')
+    setScore(0); setCombo(1); setTimeLeft(60); setPath([]); setGameState('playing')
     generatePoints()
 
     if (timerRef.current) clearInterval(timerRef.current)
@@ -107,7 +100,6 @@ export default function App() {
       setTimeLeft(prev => {
         if (prev <= 1) {
           clearInterval(timerRef.current)
-          timerRef.current = null
           setGameState('gameover')
           if (score > highScore) {
             setHighScore(score)
@@ -122,7 +114,6 @@ export default function App() {
 
   const handleClick = (p) => {
     if (gameState !== 'playing') return
-    
     if (path.length > 0) {
       const last = path.at(-1)
       if (p.color !== last.color || Math.abs(p.number - last.number) !== 1) {
@@ -134,7 +125,6 @@ export default function App() {
 
     const newPath = [...path, p]
     setPath(newPath)
-    tg?.HapticFeedback?.impactOccurred('light')
 
     if (newPath.length === 7) {
       const nums = newPath.map(x => x.number).sort((a,b) => a-b)
@@ -160,7 +150,6 @@ export default function App() {
   const openShop = () => setGameState('shop')
 
   const openTop = async () => {
-    if (!sb) return
     const { data } = await sb.from('leaderboard')
       .select('username, score')
       .order('score', { ascending: false })
