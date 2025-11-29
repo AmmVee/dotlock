@@ -1,7 +1,15 @@
 import { useEffect, useState } from 'react'
 
-const COLORS = ['#FF6B6B', '#4ECDC4', '#45B7D1', '#F7B731', '#9B59B6', '#E74C3C']
-const W = 6, H = 9
+const SKINS = {
+    classic: { name: "Классика", price: 0, colors: ['#FF6B6B', '#4ECDC4', '#45B7D1', '#F7B731', '#9B59B6', '#E74C3C'] },
+    neon: { name: "Неон", price: 1000, colors: ['#ff00ff', '#00ffff', '#ffff00', '#ff00aa', '#00ffaa', '#aa00ff'] },
+    gold: { name: "Золотой", price: 3000, colors: ['#FFD700', '#FFA500', '#FF8C00', '#FF6347', '#B8860B', '#DAA520'] },
+    cyber: { name: "Киберпанк", price: 5000, colors: ['#00ffea', '#ff0066', '#00ffea', '#ff0066', '#00ffea', '#ff0066'] },
+    galaxy: { name: "Галактика", price: 10000, colors: ['#4a00e0', '#8e2de2', '#4a00e0', '#8e2de2', '#4a00e0', '#8e2de2'] },
+    diamond: { name: "Бриллиант", price: 20000, colors: ['#b9f2ff', '#b9f2ff', '#b9f2ff', '#b9f2ff', '#b9f2ff', '#b9f2ff'] },
+    lava: { name: "Лава", price: 15000, colors: ['#ff0000', '#ff6600', '#ffff00', '#ff0000', '#ff6600', '#ffff00'] },
+    rainbow: { name: "Радуга", price: 30000, colors: ['#ff0000', '#ff8800', '#ffff00', '#00ff00', '#0088ff', '#0000ff', '#ff00ff'] }
+}
 
 export default function App() {
     const [points, setPoints] = useState([])
@@ -11,92 +19,90 @@ export default function App() {
     const [timeLeft, setTimeLeft] = useState(60)
     const [gameState, setGameState] = useState('menu')
     const [highScore, setHighScore] = useState(0)
+    const [coins, setCoins] = useState(0)
+    const [currentSkin, setCurrentSkin] = useState('classic')
+    const [ownedSkins, setOwnedSkins] = useState(['classic'])
     const [top, setTop] = useState([])
-    const [showTop, setShowTop] = useState(false)
 
     const tg = window.Telegram?.WebApp
-    const sb = window.supabaseClient // будем создавать в index.html
+    const sb = window.supabaseClient
 
     useEffect(() => {
-        tg?.ready()
-        tg?.expand()
-
-        const saved = localStorage.getItem('dotlock_hs')
-        if (saved) setHighScore(+saved)
-
-        loadTop()
-        loadMyBest()
+        tg?.ready(); tg?.expand()
+        loadAllData()
     }, [])
 
-    const loadMyBest = async () => {
+    const loadAllData = async () => {
         if (!tg?.initDataUnsafe?.user || !sb) return
-        const { data } = await sb
-            .from('leaderboard')
-            .select('score')
-            .eq('user_id', tg.initDataUnsafe.user.id)
-            .order('score', { ascending: false })
-            .limit(1)
 
-        if (data?.[0]?.score > highScore) {
-            setHighScore(data[0].score)
-            localStorage.setItem('dotlock_hs', data[0].score)
+        const { data } = await sb.from('leaderboard')
+            .select('score, coins, skin, owned_skins')
+            .eq('user_id', tg.initDataUnsafe.user.id)
+            .single()
+            .catch(() => ({ data: null }))
+
+        if (data) {
+            setHighScore(data.score || 0)
+            setCoins(data.coins || 0)
+            if (data.skin) setCurrentSkin(data.skin)
+            if (data.owned_skins) setOwnedSkins(JSON.parse(data.owned_skins))
         }
     }
 
-    const loadTop = async () => {
-        if (!sb) return
-        const { data } = await sb
-            .from('leaderboard')
-            .select('username, score')
-            .order('score', { ascending: false })
-            .limit(20)
-        setTop(data || [])
-    }
-
-    const sendScore = async () => {
-        if (!tg?.initDataUnsafe?.user || score <= highScore || !sb) return
-
-        await sb.from('leaderboard').insert({
+    const saveData = async (updates) => {
+        if (!tg?.initDataUnsafe?.user || !sb) return
+        await sb.from('leaderboard').upsert({
             user_id: tg.initDataUnsafe.user.id,
-            username: tg.initDataUnsafe.user.username || 'Игрок',
-            score
-        })
-
-        setHighScore(score)
-        localStorage.setItem('dotlock_hs', score)
-        loadTop()
-        tg?.HapticFeedback?.notificationOccurred('success')
+            username: tg.initDataUnsafe.user.username || 'Player',
+            owned_skins: JSON.stringify(ownedSkins),
+            ...updates
+        }).catch(console.error)
     }
 
-    const generate = () => {
-        const pts = []
-        for (const col of COLORS) {
+    const buySkin = async (skinKey) => {
+        const skin = SKINS[skinKey]
+        if (ownedSkins.includes(skinKey)) {
+            setCurrentSkin(skinKey)
+            await saveData({ skin: skinKey })
+            return
+        }
+        if (coins < skin.price) return
+
+        const newCoins = coins - skin.price
+        const newOwned = [...ownedSkins, skinKey]
+        setCoins(newCoins)
+        setOwnedSkins(newOwned)
+        setCurrentSkin(skinKey)
+        await saveData({ coins: newCoins, skin: skinKey, owned_skins: JSON.stringify(newOwned) })
+    }
+
+    const generatePoints = () => {
+        const colors = SKINS[currentSkin]?.colors || SKINS.classic.colors
+        const newPoints = []
+        for (let c of colors) {
             for (let n = 1; n <= 7; n++) {
                 let x, y
-                do {
-                    x = Math.floor(Math.random() * W)
-                    y = Math.floor(Math.random() * H)
-                } while (pts.some(p => p.x === x && p.y === y))
-                pts.push({ x, y, color: col, number: n, id: Math.random() })
+                do { x = Math.floor(Math.random() * 6); y = Math.floor(Math.random() * 9) }
+                while (newPoints.some(p => p.x === x && p.y === y))
+                newPoints.push({ x, y, color: c, number: n, id: Math.random() })
             }
         }
-        setPoints(pts)
+        setPoints(newPoints)
     }
 
-    const start = () => {
-        setScore(0)
-        setCombo(1)
-        setTimeLeft(60)
-        setPath([])
-        setGameState('play')
-        generate()
+    const startGame = () => {
+        setScore(0); setCombo(1); setTimeLeft(60); setPath([]); setGameState('playing')
+        generatePoints()
 
         const timer = setInterval(() => {
             setTimeLeft(t => {
                 if (t <= 1) {
                     clearInterval(timer)
-                    setGameState('over')
-                    if (score > highScore) sendScore()
+                    setGameState('gameover')
+                    if (score > highScore) {
+                        setHighScore(score)
+                        saveData({ score })
+                    }
                     return 0
                 }
                 return t - 1
@@ -104,8 +110,9 @@ export default function App() {
         }, 1000)
     }
 
-    const click = (p) => {
-        if (gameState !== 'play') return
+    const handleClick = (p) => {
+        if (gameState !== 'playing') return
+
         if (path.length > 0) {
             const last = path.at(-1)
             if (p.color !== last.color || Math.abs(p.number - last.number) !== 1) {
@@ -117,87 +124,117 @@ export default function App() {
 
         const newPath = [...path, p]
         setPath(newPath)
-        tg?.HapticFeedback?.impactOccurred('light')
 
         if (newPath.length === 7) {
             const nums = newPath.map(x => x.number).sort((a, b) => a - b)
             if (nums.every((n, i) => n === i + 1) || nums.every((n, i) => n === 7 - i)) {
-                setScore(s => s + Math.floor(49 * combo * 13))
+                const earnedScore = Math.floor(49 * combo * 13)
+                const earnedCoins = Math.floor(7 * combo * 10)
+
+                setScore(s => s + earnedScore)
+                setCoins(c => {
+                    const newC = c + earnedCoins
+                    saveData({ coins: newC })
+                    return newC
+                })
                 setCombo(c => c + 0.4)
+
                 setPoints(prev => prev.filter(x => !newPath.includes(x)))
                 setPath([])
-                setTimeout(generate, 350)
+                setTimeout(generatePoints, 350)
             }
         }
     }
 
-    if (showTop) {
-        return (
-            <div style={{ textAlign: 'center', paddingTop: '80px' }}>
-                <h1 style={{ fontSize: '48px', marginBottom: '30px' }}>Топ-20</h1>
-                {top.length === 0 ? <p>Пока пусто</p> : top.map((p, i) => (
-                    <div key={i} style={{ display: 'flex', justifyContent: 'space-between', margin: '8px auto', width: '300px', background: 'rgba(255,255,255,0.1)', padding: '12px', borderRadius: '12px' }}>
-                        <span>{i < 3 ? ['🥇', '🥈', '🥉'][i] : i + 1}. {p.username || 'Игрок'}</span>
-                        <span style={{ color: '#ffd700' }}>{p.score.toLocaleString()}</span>
-                    </div>
-                ))}
-                <button onClick={() => setShowTop(false)} style={{ marginTop: '30px', padding: '16px 50px', fontSize: '24px', border: 'none', borderRadius: '50px', background: '#45b7d1', color: 'white' }}>Назад</button>
-            </div>
-        )
+    const openShop = () => setGameState('shop')
+    const openLeaderboard = async () => {
+        const { data } = await sb.from('leaderboard')
+            .select('username, score').order('score', { ascending: false }).limit(20)
+        setTop(data || [])
+        setGameState('leaderboard')
     }
 
     return (
-        <div style={{ minHeight: '100vh', background: '#0f0f1e', color: 'white' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', padding: '15px 20px', fontWeight: 'bold', background: 'rgba(0,0,0,0.5)', borderRadius: '16px', margin: '8px' }}>
+        <div className="app">
+            <div className="header">
                 <div>Score: {score.toLocaleString()}</div>
-                <div style={{ color: timeLeft <= 10 ? '#ff3b30' : '#ffd700' }}>{timeLeft}s</div>
-                <div>x{combo.toFixed(1)}</div>
+                <div style={{ color: timeLeft <= 10 ? '#ff3b30' : '#00ffff' }}>{timeLeft}s</div>
+                <div>🪙 {coins.toLocaleString()}</div>
             </div>
 
             {gameState === 'menu' && (
-                <div style={{ textAlign: 'center', paddingTop: '100px' }}>
-                    <h1 style={{ fontSize: '68px', background: 'linear-gradient(45deg,#ff6b6b,#4ecdc4)', WebkitBackgroundClip: 'text', color: 'transparent' }}>DOTLOCK</h1>
-                    <p style={{ fontSize: '24px', margin: '20px' }}>Рекорд: {highScore.toLocaleString()}</p>
-                    <button onClick={start} style={{ background: '#45b7d1', padding: '18px 60px', fontSize: '28px', border: 'none', borderRadius: '50px', margin: '20px' }}>ИГРАТЬ</button>
-                    <button onClick={() => { loadTop(); setShowTop(true) }} style={{ background: '#f7b731', padding: '18px 60px', fontSize: '28px', border: 'none', borderRadius: '50px' }}>ТОП</button>
+                <div className="menu">
+                    <h1>DOTLOCK</h1>
+                    <p style={{ fontSize: '28px', color: '#ffd700', margin: '20px 0' }}>Рекорд: {highScore.toLocaleString()}</p>
+                    <button className="play" onClick={startGame}>ИГРАТЬ</button>
+                    <button className="play" onClick={openShop}>МАГАЗИН</button>
+                    <button className="play" onClick={openLeaderboard}>ТОП-20</button>
                 </div>
             )}
 
-            {gameState === 'play' && (
-                <div style={{ position: 'relative', width: '360px', height: '540px', margin: '30px auto', background: 'rgba(255,255,255,0.05)', borderRadius: '20px', overflow: 'hidden' }}>
+            {gameState === 'playing' && (
+                <div className="field">
                     {points.map(p => (
                         <div
                             key={p.id}
-                            onPointerDown={() => click(p)}
-                            style={{
-                                position: 'absolute',
-                                width: '52px',
-                                height: '52px',
-                                background: p.color,
-                                borderRadius: '50%',
-                                left: p.x * 58 + 10,
-                                top: p.y * 58 + 10,
-                                display: 'flex',
-                                alignItems: 'center',
-                                justifyContent: 'center',
-                                fontWeight: 'bold',
-                                fontSize: '20px',
-                                transform: path.includes(p) ? 'scale(1.6)' : 'scale(1)',
-                                transition: 'all 0.25s',
-                                boxShadow: path.includes(p) ? '0 0 50px currentColor' : '0 4px 20px rgba(0,0,0,0.6)'
-                            }}
+                            className={`dot ${path.includes(p) ? 'active' : ''}`}
+                            style={{ background: p.color, left: p.x * 64 + 12, top: p.y * 64 + 12 }}
+                            onPointerDown={() => handleClick(p)}
                         >{p.number}</div>
                     ))}
                 </div>
             )}
 
-            {gameState === 'over' && (
-                <div style={{ textAlign: 'center', paddingTop: '100px' }}>
+            {gameState === 'gameover' && (
+                <div className="menu">
                     <h2>Время вышло!</h2>
-                    <h1 style={{ fontSize: '48px', margin: '30px' }}>{score.toLocaleString()} очков</h1>
-                    {score > highScore && <div style={{ color: '#ffd700', fontSize: '36px', animation: 'pulse 1s infinite' }}>НОВЫЙ РЕКОРД!</div>}
-                    <button onClick={start} style={{ background: '#45b7d1', padding: '18px 60px', fontSize: '28px', border: 'none', borderRadius: '50px', margin: '20px' }}>ИГРАТЬ СНОВА</button>
-                    <button onClick={() => { loadTop(); setShowTop(true) }} style={{ background: '#f7b731', padding: '18px 60px', fontSize: '28px', border: 'none', borderRadius: '50px' }}>ТОП</button>
+                    <h1 style={{ fontSize: '48px', margin: '30px 0' }}>{score.toLocaleString()} очков</h1>
+                    {score > highScore && <div style={{ color: '#ffd700', fontSize: '42px' }}>НОВЫЙ РЕКОРД!</div>}
+                    <button className="play" onClick={() => setGameState('menu')}>В МЕНЮ</button>
+                    <button className="play" onClick={openLeaderboard}>ТОП-20</button>
+                </div>
+            )}
+
+            {gameState === 'shop' && (
+                <div className="menu">
+                    <h1 style={{ fontSize: '56px' }}>МАГАЗИН</h1>
+                    <p style={{ fontSize: '32px', color: '#ffd700', margin: '20px 0' }}>🪙 {coins.toLocaleString()}</p>
+
+                    <div className="shop-container">
+                        {Object.entries(SKINS).map(([key, skin]) => (
+                            <div key={key} className={`shop-item ${currentSkin === key ? 'active' : ''}`}>
+                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                    <div>
+                                        <h3 style={{ fontSize: '26px' }}>{skin.name}</h3>
+                                        <p>{skin.price.toLocaleString()} 🪙</p>
+                                    </div>
+                                    <button
+                                        className={`buy-btn ${ownedSkins.includes(key) || coins >= skin.price ? 'active' : 'disabled'}`}
+                                        onClick={() => buySkin(key)}
+                                    >
+                                        {currentSkin === key ? 'ЭКИПИРОВАН' : ownedSkins.includes(key) ? 'ЭКИПИРОВАТЬ' : 'КУПИТЬ'}
+                                    </button>
+                                </div>
+                            </div>
+                        ))}
+                    </div>
+
+                    <button className="play" onClick={() => setGameState('menu')}>НАЗАД</button>
+                </div>
+            )}
+
+            {gameState === 'leaderboard' && (
+                <div className="menu">
+                    <h1 style={{ fontSize: '56px' }}>ТОП-20</h1>
+                    <div className="top-container">
+                        {top.length === 0 ? <p>Пока пусто</p> : top.map((p, i) => (
+                            <div key={i} className="lb-row">
+                                <span>{i < 3 ? ['🥇', '🥈', '🥉'][i] : i + 1}. {p.username || 'Игрок'}</span>
+                                <span>{p.score.toLocaleString()}</span>
+                            </div>
+                        ))}
+                    </div>
+                    <button className="play" onClick={() => setGameState('menu')}>НАЗАД</button>
                 </div>
             )}
         </div>
