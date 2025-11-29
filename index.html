@@ -1,194 +1,21 @@
 <!DOCTYPE html>
 <html lang="ru">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
-  <title>DotLock</title>
-  <script src="https://telegram.org/js/telegram-web-app.js"></script>
-  <style>
-    *{margin:0;padding:0;box-sizing:border-box}
-    body{background:#0f0f1e;color:#fff;font-family:system-ui,sans-serif;overflow:hidden}
-    .app{padding:env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left)}
-    .header{display:flex;justify-content:space-between;padding:15px 20px;font-size:20px;font-weight:bold;background:rgba(0,0,0,0.5);border-radius:16px;margin:8px 8px 0}
-    .menu{text-align:center;padding-top:80px}
-    .menu h1{font-size:68px;background:linear-gradient(45deg,#ff6b6b,#4ecdc4,#45b7d1,#f7b731);-webkit-background-clip:text;color:transparent}
-    .play{background:linear-gradient(45deg,#4ecdc4,#45b7d1);border:none;padding:18px 60px;font-size:26px;font-weight:bold;border-radius:50px;margin:15px;cursor:pointer}
-    .play.lb{background:linear-gradient(45deg,#f7b731,#ff6b6b)}
-    .field{position:relative;width:360px;height:540px;margin:20px auto;background:rgba(255,255,255,0.05);border-radius:20px;overflow:hidden}
-    .dot{position:absolute;width:52px;height:52px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:bold;font-size:20px;transition:all .25s;box-shadow:0 4px 20px rgba(0,0,0,0.6);cursor:pointer}
-    .dot:active,.active{transform:scale(1.6);box-shadow:0 0 50px currentColor;z-index:10}
-    .newrecord{color:#ffd700;font-size:36px;animation:pulse 1.2s infinite;margin:25px 0}
-    .lb{max-width:340px;margin:0 auto 30px}
-    .lb-row{display:flex;justify-content:space-between;padding:12px 20px;background:rgba(255,255,255,0.08);margin:6px 0;border-radius:16px;font-size:18px}
-    @keyframes pulse{0%,100%{transform:scale(1)}50%{transform:scale(1.2)}}
-  </style>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+    <title>DotLock</title>
+    <script src="https://telegram.org/js/telegram-web-app.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 </head>
 <body>
-  <div class="app">
-    <div class="header">
-      <div id="score">Score: 0</div>
-      <div id="timer" style="color:#ffd700">60s</div>
-      <div id="combo">x1.0</div>
-    </div>
+    <div id="root"></div>
+    <script type="module" src="/src/main.jsx"></script>
 
-    <div id="menu" class="menu">
-      <h1>DOTLOCK</h1>
-      <p class="record">Рекорд: <span id="record">0</span></p>
-      <button class="play" onclick="startGame()">ИГРАТЬ</button>
-      <button class="play lb" onclick="showLeaderboard()">ГЛОБАЛЬНЫЙ ТОП</button>
-    </div>
-
-    <div id="field" class="field" style="display:none"></div>
-
-    <div id="gameover" class="menu" style="display:none">
-      <h2>Время вышло!</h2>
-      <h1 id="finalscore">0 очков</h1>
-      <div class="newrecord" id="newrecord" style="display:none">НОВЫЙ РЕКОРД!</div>
-      <button class="play" onclick="startGame()">ИГРАТЬ СНОВА</button>
-      <button class="play lb" onclick="showLeaderboard()">ГЛОБАЛЬНЫЙ ТОП</button>
-    </div>
-  </div>
-
-  <script>
-    const SUPABASE_URL = "https://cspryiqfeaftrzaxpwpk.supabase.co";
-    const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImNzcHJ5aXFmZWFmdHJ6YXhwd3BrIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjQzNDA2MTcsImV4cCI6MjA3OTkxNjYxN30.MthAF6y-b1xg9__wE6udozyNTdEMN5yE-FDKIRMhe1s";
-    
-    const { createClient } = supabase;
-    const sb = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
-
-    const COLORS = ['#FF6B6B','#4ECDC4','#45B7D1','#F7B731','#9B59B6','#E74C3C'];
-    const W = 6, H = 9;
-    let points = [], path = [], score = 0, combo = 1, timeLeft = 60, highScore = localStorage.getItem('dotlock_hs') || 0;
-    const tg = window.Telegram?.WebApp || {HapticFeedback:{}};
-    tg.ready?.(); tg.expand?.();
-
-    document.getElementById('record').textContent = Number(highScore).toLocaleString();
-
-    async function loadLeaderboard() {
-      const { data } = await sb.from('leaderboard').select('username,score').order('score', {ascending: false}).limit(20);
-      return data || [];
-    }
-
-    async function sendRecord() {
-      if (!tg.initDataUnsafe?.user || score <= highScore) return;
-      await sb.from('leaderboard').insert({
-        user_id: tg.initDataUnsafe.user.id,
-        username: tg.initDataUnsafe.user.username || 'Игрок',
-        score: score
-      });
-      highScore = score;
-      localStorage.setItem('dotlock_hs', score);
-      document.getElementById('record').textContent = score.toLocaleString();
-      tg.HapticFeedback.notificationOccurred('success');
-    }
-
-    function generatePoints() {
-      points = []; const used = {};
-      for (let col of COLORS) {
-        for (let num = 1; num <= 7; num++) {
-          let x, y;
-          do { x = Math.floor(Math.random()*W); y = Math.floor(Math.random()*H); }
-          while (points.some(p => p.x === x && p.y === y));
-          points.push({x, y, color: col, number: num, id: Date.now() + Math.random()});
-        }
-      }
-      renderField();
-    }
-
-    function renderField() {
-      const field = document.getElementById('field');
-      field.innerHTML = '';
-      points.forEach(p => {
-        const dot = document.createElement('div');
-        dot.className = 'dot' + (path.includes(p) ? ' active' : '');
-        dot.style.background = p.color;
-        dot.style.left = p.x*58+10+'px';
-        dot.style.top = p.y*58+10+'px';
-        dot.textContent = p.number;
-        dot.onclick = () => handleClick(p);
-        field.appendChild(dot);
-      });
-    }
-
-    function handleClick(p) {
-      if (path.length > 0) {
-        const last = path[path.length-1];
-        if (p.color !== last.color || Math.abs(p.number - last.number) !== 1) {
-          path = [];
-          renderField();
-          return;
-        }
-      }
-      if (path.includes(p)) return;
-      path.push(p);
-      renderField();
-      tg.HapticFeedback.impactOccurred('light');
-
-      if (path.length === 7) {
-        const nums = path.map(x => x.number).sort((a,b)=>a-b);
-        if (nums.every((n,i) => n === i+1) || nums.every((n,i) => n === 7-i)) {
-          score += Math.floor(49 * combo * 13);
-          combo += 0.4;
-          document.getElementById('score').textContent = 'Score: ' + score.toLocaleString();
-          document.getElementById('combo').textContent = 'x' + combo.toFixed(1);
-          points = points.filter(x => !path.includes(x));
-          path = [];
-          setTimeout(generatePoints, 350);
-        }
-      }
-    }
-
-    function startGame() {
-      score = 0; combo = 1; timeLeft = 60; path = [];
-      document.getElementById('score').textContent = 'Score: 0';
-      document.getElementById('combo').textContent = 'x1.0';
-      document.getElementById('menu').style.display = 'none';
-      document.getElementById('gameover').style.display = 'none';
-      document.getElementById('field').style.display = 'block';
-      generatePoints();
-
-      const timer = setInterval(() => {
-        timeLeft--;
-        document.getElementById('timer').textContent = timeLeft + 's';
-        if (timeLeft <= 0) {
-          clearInterval(timer);
-          document.getElementById('field').style.display = 'none';
-          document.getElementById('gameover').style.display = 'block';
-          document.getElementById('finalscore').textContent = score.toLocaleString() + ' очков';
-          if (score > highScore) {
-            document.getElementById('newrecord').style.display = 'block';
-            sendRecord();
-          }
-        }
-      }, 1000);
-    }
-
-    async function showLeaderboard() {
-      const data = await loadLeaderboard();
-      let html = '<h1 style="font-size:52px;margin:30px 0">Глобальный топ</h1><div class="lb">';
-      if (data.length === 0) html += '<p>Пока пусто :(</p>';
-      else data.forEach((p,i) => {
-        const medal = i < 3 ? ['🥇','🥈','🥉'][i] : `${i+1}.`;
-        html += `<div class="lb-row"><span>${medal} ${p.username || 'Игрок'}</span><span>${p.score.toLocaleString()}</span></div>`;
-      });
-      html += '</div><button class="play" onclick="document.getElementById(\'menu\').style.display=\'block\';this.parentElement.style.display=\'none\'">Назад</button>';
-      const div = document.createElement('div');
-      div.className = 'menu';
-      div.innerHTML = html;
-      document.body.appendChild(div);
-    }
-
-    // Загружаем личный рекорд с сервера при старте
-    (async () => {
-      if (tg.initDataUnsafe?.user) {
-        const { data } = await sb.from('leaderboard').select('score').eq('user_id', tg.initDataUnsafe.user.id).order('score', {ascending: false}).limit(1);
-        if (data?.[0]?.score > highScore) {
-          highScore = data[0].score;
-          localStorage.setItem('dotlock_hs', highScore);
-          document.getElementById('record').textContent = highScore.toLocaleString();
-        }
-      }
-    })();
-  </script>
+    <script>
+        const SUPABASE_URL = "https://cspryiqfeaftrzaxpwpk.supabase.co";
+        const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImNzcHJ5aXFmZWFmdHJ6YXhwd3BrIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjQzNDA2MTcsImV4cCI6MjA3OTkxNjYxN30.MthAF6y-b1xg9__wE6udozyNTdEMN5yE-FDKIRMhe1s";
+        window.sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+    </script>
 </body>
 </html>
+
