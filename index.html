@@ -6,6 +6,14 @@
     <title>DOTLOCK</title>
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
     <script type="module" src="/src/main.jsx"></script>
+    <style>
+        body {
+            margin: 0;
+            background: #000;
+            font-family: system-ui;
+            overflow: hidden;
+        }
+    </style>
 </head>
 <body>
     <div id="root"></div>
@@ -17,6 +25,19 @@
             'https://cspryiqfeaftrzaxpwpk.supabase.co',
             'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImNzcHJ5aXFmZWFmdHJ6YXhwd3BrIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjQzNDA2MTcsImV4cCI6MjA3OTkxNjYxN30.MthAF6y-b1xg9__wE6udozyNTdEMN5yE-FDKIRMhe1s'
         )
+
+        // ГЛАВНОЕ ИСПРАВЛЕНИЕ — fallback для прямых ссылок
+        if (!window.Telegram?.WebApp?.initDataUnsafe) {
+            // Для тестирования вне Telegram — используй свой ID
+            window.Telegram = {
+                WebApp: {
+                    initDataUnsafe: { user: { id: 123456789, username: 'test_user' } },
+                    ready: () => { },
+                    expand: () => { },
+                    HapticFeedback: { impactOccurred: () => { }, notificationOccurred: () => { } }
+                }
+            }
+        }
     </script>
 </body>
 </html>

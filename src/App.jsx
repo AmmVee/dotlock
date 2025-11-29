@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useRef } from 'react'
 
 const SKINS = {
     classic: { name: "Классика", price: 0, colors: ['#FF6B6B', '#4ECDC4', '#45B7D1', '#F7B731', '#9B59B6', '#E74C3C'] },
@@ -26,55 +26,80 @@ export default function App() {
 
     const tg = window.Telegram?.WebApp
     const sb = window.supabaseClient
+    const user = tg?.initDataUnsafe?.user
+
+    const timerRef = useRef(null) // <-- ЭТО ГЛАВНОЕ ИСПРАВЛЕНИЕ
 
     useEffect(() => {
         tg?.ready(); tg?.expand()
-        loadAllData()
-    }, [])
+        if (user) loadAllData()
+    }, [user])
 
     const loadAllData = async () => {
-        if (!tg?.initDataUnsafe?.user || !sb) return
+        if (!user || !sb) return
 
         const { data } = await sb.from('leaderboard')
-            .select('score, coins, skin, owned_skins')
-            .eq('user_id', tg.initDataUnsafe.user.id)
+            .select('*')
+            .eq('user_id', user.id)
             .single()
             .catch(() => ({ data: null }))
 
         if (data) {
             setHighScore(data.score || 0)
             setCoins(data.coins || 0)
-            if (data.skin) setCurrentSkin(data.skin)
+            setCurrentSkin(data.skin || 'classic')
             if (data.owned_skins) setOwnedSkins(JSON.parse(data.owned_skins))
         }
     }
 
     const saveData = async (updates) => {
-        if (!tg?.initDataUnsafe?.user || !sb) return
+        if (!user || !sb) return
         await sb.from('leaderboard').upsert({
-            user_id: tg.initDataUnsafe.user.id,
-            username: tg.initDataUnsafe.user.username || 'Player',
+            user_id: user.id,
+            username: user.username || 'Player',
             owned_skins: JSON.stringify(ownedSkins),
             ...updates
-        }).catch(console.error)
+        }).catch(() => { })
     }
 
-    const buySkin = async (skinKey) => {
-        const skin = SKINS[skinKey]
-        if (ownedSkins.includes(skinKey)) {
-            setCurrentSkin(skinKey)
-            await saveData({ skin: skinKey })
-            return
+    const startGame = () => {
+        setScore(0)
+        setCombo(1)
+        setTimeLeft(60)
+        setPath([])
+        setPoints([])
+        setGameState('playing')
+        generatePoints()
+
+        // ЧИСТЫЙ И НАДЁЖНЫЙ ТАЙМЕР
+        if (timerRef.current) clearInterval(timerRef.current)
+
+        timerRef.current = setInterval(() => {
+            setTimeLeft(prev => {
+                if (prev <= 1) {
+                    clearInterval(timerRef.current)
+                    timerRef.current = null
+                    setGameState('gameover')
+                    if (score > highScore) {
+                        setHighScore(score)
+                        saveData({ score })
+                    }
+                    return 0
+                }
+                return prev - 1
+            })
+        }, 1000)
+    }
+
+    // Очистка таймера при выходе из игры
+    useEffect(() => {
+        return () => {
+            if (timerRef.current) {
+                clearInterval(timerRef.current)
+                timerRef.current = null
+            }
         }
-        if (coins < skin.price) return
-
-        const newCoins = coins - skin.price
-        const newOwned = [...ownedSkins, skinKey]
-        setCoins(newCoins)
-        setOwnedSkins(newOwned)
-        setCurrentSkin(skinKey)
-        await saveData({ coins: newCoins, skin: skinKey, owned_skins: JSON.stringify(newOwned) })
-    }
+    }, [])
 
     const generatePoints = () => {
         const colors = SKINS[currentSkin]?.colors || SKINS.classic.colors
@@ -88,26 +113,6 @@ export default function App() {
             }
         }
         setPoints(newPoints)
-    }
-
-    const startGame = () => {
-        setScore(0); setCombo(1); setTimeLeft(60); setPath([]); setGameState('playing')
-        generatePoints()
-
-        const timer = setInterval(() => {
-            setTimeLeft(t => {
-                if (t <= 1) {
-                    clearInterval(timer)
-                    setGameState('gameover')
-                    if (score > highScore) {
-                        setHighScore(score)
-                        saveData({ score })
-                    }
-                    return 0
-                }
-                return t - 1
-            })
-        }, 1000)
     }
 
     const handleClick = (p) => {
@@ -147,11 +152,12 @@ export default function App() {
     }
 
     const openShop = () => setGameState('shop')
-    const openLeaderboard = async () => {
+    const openTop = async () => {
+        if (!sb) return
         const { data } = await sb.from('leaderboard')
             .select('username, score').order('score', { ascending: false }).limit(20)
         setTop(data || [])
-        setGameState('leaderboard')
+        setGameState('top')
     }
 
     return (
@@ -168,7 +174,7 @@ export default function App() {
                     <p style={{ fontSize: '28px', color: '#ffd700', margin: '20px 0' }}>Рекорд: {highScore.toLocaleString()}</p>
                     <button className="play" onClick={startGame}>ИГРАТЬ</button>
                     <button className="play" onClick={openShop}>МАГАЗИН</button>
-                    <button className="play" onClick={openLeaderboard}>ТОП-20</button>
+                    <button className="play" onClick={openTop}>ТОП-20</button>
                 </div>
             )}
 
@@ -191,7 +197,7 @@ export default function App() {
                     <h1 style={{ fontSize: '48px', margin: '30px 0' }}>{score.toLocaleString()} очков</h1>
                     {score > highScore && <div style={{ color: '#ffd700', fontSize: '42px' }}>НОВЫЙ РЕКОРД!</div>}
                     <button className="play" onClick={() => setGameState('menu')}>В МЕНЮ</button>
-                    <button className="play" onClick={openLeaderboard}>ТОП-20</button>
+                    <button className="play" onClick={openTop}>ТОП-20</button>
                 </div>
             )}
 
@@ -219,22 +225,26 @@ export default function App() {
                         ))}
                     </div>
 
-                    <button className="play" onClick={() => setGameState('menu')}>НАЗАД</button>
+                    <button className="play" style={{ position: 'fixed', bottom: '30px', left: '50%', transform: 'translateX(-50%)', zIndex: 999 }} onClick={() => setGameState('menu')}>
+                        НАЗАД
+                    </button>
                 </div>
             )}
 
-            {gameState === 'leaderboard' && (
+            {gameState === 'top' && (
                 <div className="menu">
                     <h1 style={{ fontSize: '56px' }}>ТОП-20</h1>
                     <div className="top-container">
-                        {top.length === 0 ? <p>Пока пусто</p> : top.map((p, i) => (
+                        {top.length === 0 ? <p style={{ opacity: 0.7 }}>Пока пусто :( Будь первым!</p> : top.map((p, i) => (
                             <div key={i} className="lb-row">
                                 <span>{i < 3 ? ['🥇', '🥈', '🥉'][i] : i + 1}. {p.username || 'Игрок'}</span>
                                 <span>{p.score.toLocaleString()}</span>
                             </div>
                         ))}
                     </div>
-                    <button className="play" onClick={() => setGameState('menu')}>НАЗАД</button>
+                    <button className="play" style={{ position: 'fixed', bottom: '30px', left: '50%', transform: 'translateX(-50%)', zIndex: 999 }} onClick={() => setGameState('menu')}>
+                        НАЗАД
+                    </button>
                 </div>
             )}
         </div>
