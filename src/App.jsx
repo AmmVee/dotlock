@@ -41,14 +41,16 @@ export default function App() {
       .from('leaderboard')
       .select('score, coins, skin, owned_skins')
       .eq('user_id', user.id)
-      .maybeSingle()
+      .single()
 
     if (data) {
       setHighScore(data.score || 0)
       setCoins(data.coins || 0)
       setCurrentSkin(data.skin || 'classic')
-      if (data.owned_skins) {
-        try { setOwnedSkins(JSON.parse(data.owned_skins)) } catch { setOwnedSkins(['classic']) }
+      try {
+        setOwnedSkins(data.owned_skins ? JSON.parse(data.owned_skins) : ['classic'])
+      } catch (e) {
+        setOwnedSkins(['classic'])
       }
     }
   }
@@ -56,19 +58,12 @@ export default function App() {
   const saveData = async (updates) => {
     if (!user || !sb) return
 
-    const { error } = await sb
-      .from('leaderboard')
-      .upsert(
-        {
-          user_id: user.id,
-          username: user.username || 'Player',
-          owned_skins: JSON.stringify(ownedSkins),
-          ...updates
-        },
-        { onConflict: 'user_id' } // ← ЭТО ГЛАВНОЕ ИСПРАВЛЕНИЕ
-      )
-
-    if (error) console.error('Ошибка сохранения:', error)
+    await sb.from('leaderboard').upsert({
+      user_id: user.id,
+      username: user.username || 'Player',
+      owned_skins: JSON.stringify(ownedSkins),
+      ...updates
+    }, { onConflict: 'user_id' })
   }
 
   const buySkin = async (skinKey) => {
@@ -86,6 +81,7 @@ export default function App() {
     setOwnedSkins(newOwned)
     setCurrentSkin(skinKey)
     await saveData({ coins: newCoins, skin: skinKey, owned_skins: JSON.stringify(newOwned) })
+    tg?.HapticFeedback?.notificationOccurred('success')
   }
 
   const generatePoints = () => {
@@ -137,6 +133,7 @@ export default function App() {
 
     const newPath = [...path, p]
     setPath(newPath)
+    tg?.HapticFeedback?.impactOccurred('light')
 
     if (newPath.length === 7) {
       const nums = newPath.map(x => x.number).sort((a,b) => a-b)
