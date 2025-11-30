@@ -30,8 +30,7 @@ export default function App() {
   const timerRef = useRef(null)
 
   useEffect(() => {
-    tg?.ready()
-    tg?.expand()
+    tg?.ready(); tg?.expand()
     if (user) loadAllData()
   }, [user])
 
@@ -43,7 +42,6 @@ export default function App() {
       .select('score, coins, skin, owned_skins')
       .eq('user_id', user.id)
       .single()
-      .catch(() => ({ data: null }))
 
     if (data) {
       setHighScore(data.score || 0)
@@ -51,7 +49,7 @@ export default function App() {
       setCurrentSkin(data.skin || 'classic')
       try {
         setOwnedSkins(data.owned_skins ? JSON.parse(data.owned_skins) : ['classic'])
-      } catch {
+      } catch (e) {
         setOwnedSkins(['classic'])
       }
     }
@@ -73,10 +71,8 @@ export default function App() {
     if (ownedSkins.includes(skinKey)) {
       setCurrentSkin(skinKey)
       await saveData({ skin: skinKey })
-      tg?.HapticFeedback?.notificationOccurred('success')
       return
     }
-
     if (coins < skin.price) return
 
     const newCoins = coins - skin.price
@@ -94,22 +90,16 @@ export default function App() {
     for (let c of colors) {
       for (let n = 1; n <= 7; n++) {
         let x, y
-        do {
-          x = Math.floor(Math.random() * 6)
-          y = Math.floor(Math.random() * 9)
-        } while (newPoints.some(p => p.x === x && p.y === y))
-        newPoints.push({ x, y, color: c, number: n, id: Math.random() })
+        do { x = Math.floor(Math.random()*6); y = Math.floor(Math.random()*9) }
+        while (newPoints.some(p => p.x === x && p.y === y))
+        newPoints.push({x, y, color: c, number: n, id: Math.random()})
       }
     }
     setPoints(newPoints)
   }
 
   const startGame = () => {
-    setScore(0)
-    setCombo(1)
-    setTimeLeft(60)
-    setPath([])
-    setGameState('playing')
+    setScore(0); setCombo(1); setTimeLeft(60); setPath([]); setGameState('playing')
     generatePoints()
 
     if (timerRef.current) clearInterval(timerRef.current)
@@ -131,7 +121,7 @@ export default function App() {
 
   const handleClick = (p) => {
     if (gameState !== 'playing') return
-
+    
     if (path.length > 0) {
       const last = path.at(-1)
       if (p.color !== last.color || Math.abs(p.number - last.number) !== 1) {
@@ -146,11 +136,11 @@ export default function App() {
     tg?.HapticFeedback?.impactOccurred('light')
 
     if (newPath.length === 7) {
-      const nums = newPath.map(x => x.number).sort((a, b) => a - b)
-      if (nums.every((n, i) => n === i + 1) || nums.every((n, i) => n === 7 - i)) {
+      const nums = newPath.map(x => x.number).sort((a,b) => a-b)
+      if (nums.every((n,i) => n === i+1) || nums.every((n,i) => n === 7-i)) {
         const earnedScore = Math.floor(49 * combo * 13)
         const earnedCoins = Math.floor(7 * combo * 10)
-
+        
         setScore(s => s + earnedScore)
         setCoins(c => {
           const newC = c + earnedCoins
@@ -182,16 +172,14 @@ export default function App() {
     <div className="app">
       <div className="header">
         <div>Score: {score.toLocaleString()}</div>
-        <div style={{ color: timeLeft <= 10 ? '#ff3b30' : '#00ffff' }}>{timeLeft}s</div>
+        <div style={{color: timeLeft<=10?'#ff3b30':'#00ffff'}}>{timeLeft}s</div>
         <div>🪙 {coins.toLocaleString()}</div>
       </div>
 
       {gameState === 'menu' && (
         <div className="menu">
           <h1>DOTLOCK</h1>
-          <p style={{ fontSize: '28px', color: '#ffd700', margin: '20px 0' }}>
-            Рекорд: {highScore.toLocaleString()}
-          </p>
+          <p style={{fontSize:'28px', color:'#ffd700', margin:'20px 0'}}>Рекорд: {highScore.toLocaleString()}</p>
           <button className="play" onClick={startGame}>ИГРАТЬ</button>
           <button className="play" onClick={openShop}>МАГАЗИН</button>
           <button className="play" onClick={openTop}>ТОП-20</button>
@@ -199,31 +187,23 @@ export default function App() {
       )}
 
       {gameState === 'playing' && (
-        <div className="field-container">
-          <div className="field">
-            {points.map(p => (
-              <div
-                key={p.id}
-                className={`dot ${path.includes(p) ? 'active' : ''}`}
-                style={{
-                  background: p.color,
-                  left: `${p.x * 16.66 + 2}%`,
-                  top: `${p.y * 16.66 + 2}%`
-                }}
-                onPointerDown={() => handleClick(p)}
-              >
-                {p.number}
-              </div>
-            ))}
-          </div>
+        <div className="field">
+          {points.map(p => (
+            <div
+              key={p.id}
+              className={`dot ${path.includes(p) ? 'active' : ''}`}
+              style={{background: p.color, left: p.x*64+12, top: p.y*64+12}}
+              onPointerDown={() => handleClick(p)}
+            >{p.number}</div>
+          ))}
         </div>
       )}
 
       {gameState === 'gameover' && (
         <div className="menu">
           <h2>Время вышло!</h2>
-          <h1 style={{ fontSize: '48px', margin: '30px 0' }}>{score.toLocaleString()} очков</h1>
-          {score > highScore && <div style={{ color: '#ffd700', fontSize: '42px' }}>НОВЫЙ РЕКОРД!</div>}
+          <h1 style={{fontSize:'48px', margin:'30px 0'}}>{score.toLocaleString()} очков</h1>
+          {score > highScore && <div style={{color:'#ffd700', fontSize:'42px'}}>НОВЫЙ РЕКОРД!</div>}
           <button className="play" onClick={() => setGameState('menu')}>В МЕНЮ</button>
           <button className="play" onClick={openTop}>ТОП-20</button>
         </div>
@@ -231,18 +211,18 @@ export default function App() {
 
       {gameState === 'shop' && (
         <div className="menu">
-          <h1 style={{ fontSize: '56px' }}>МАГАЗИН</h1>
-          <p style={{ fontSize: '32px', color: '#ffd700', margin: '20px 0' }}>🪙 {coins.toLocaleString()}</p>
-
+          <h1 style={{fontSize:'56px'}}>МАГАЗИН</h1>
+          <p style={{fontSize:'32px', color:'#ffd700', margin:'20px 0'}}>🪙 {coins.toLocaleString()}</p>
+          
           <div className="shop-container">
             {Object.entries(SKINS).map(([key, skin]) => (
               <div key={key} className={`shop-item ${currentSkin === key ? 'active' : ''}`}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <div style={{display:'flex', justifyContent:'space-between', alignItems:'center'}}>
                   <div>
-                    <h3 style={{ fontSize: '26px' }}>{skin.name}</h3>
+                    <h3 style={{fontSize:'26px'}}>{skin.name}</h3>
                     <p>{skin.price.toLocaleString()} 🪙</p>
                   </div>
-                  <button
+                  <button 
                     className={`buy-btn ${ownedSkins.includes(key) || coins >= skin.price ? 'active' : 'disabled'}`}
                     onClick={() => buySkin(key)}
                   >
@@ -252,12 +232,8 @@ export default function App() {
               </div>
             ))}
           </div>
-
-          <button
-            className="play"
-            style={{ position: 'fixed', bottom: '30px', left: '50%', transform: 'translateX(-50%)', zIndex: 999 }}
-            onClick={() => setGameState('menu')}
-          >
+          
+          <button className="play" style={{position:'fixed', bottom:'30px', left:'50%', transform:'translateX(-50%)', zIndex:999}} onClick={() => setGameState('menu')}>
             НАЗАД
           </button>
         </div>
@@ -265,26 +241,18 @@ export default function App() {
 
       {gameState === 'top' && (
         <div className="menu">
-          <h1 style={{ fontSize: '56px' }}>ТОП-20</h1>
+          <h1 style={{fontSize:'56px'}}>ТОП-20</h1>
           <div className="top-container">
             {top.length === 0 ? (
-              <p style={{ opacity: 0.7, fontSize: '20px' }}>Пока пусто :( Будь первым!</p>
-            ) : (
-              top.map((p, i) => (
-                <div key={i} className="lb-row">
-                  <span>
-                    {i < 3 ? ['🥇', '🥈', '🥉'][i] : i + 1}. {p.username || 'Игрок'}
-                  </span>
-                  <span>{p.score.toLocaleString()}</span>
-                </div>
-              ))
-            )}
+              <p style={{opacity:0.7, fontSize:'20px'}}>Пока пусто :( Будь первым!</p>
+            ) : top.map((p,i) => (
+              <div key={i} className="lb-row">
+                <span>{i < 3 ? ['🥇','🥈','🥉'][i] : i+1}. {p.username || 'Игрок'}</span>
+                <span>{p.score.toLocaleString()}</span>
+              </div>
+            ))}
           </div>
-          <button
-            className="play"
-            style={{ position: 'fixed', bottom: '30px', left: '50%', transform: 'translateX(-50%)', zIndex: 999 }}
-            onClick={() => setGameState('menu')}
-          >
+          <button className="play" style={{position:'fixed', bottom:'30px', left:'50%', transform:'translateX(-50%)', zIndex:999}} onClick={() => setGameState('menu')}>
             НАЗАД
           </button>
         </div>
