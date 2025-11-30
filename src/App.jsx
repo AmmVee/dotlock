@@ -91,6 +91,7 @@ export default function App() {
   const generatePoints = () => {
     const colors = SKINS[currentSkin]?.colors || SKINS.classic.colors
     const newPoints = []
+
     for (let c of colors) {
       for (let n = 1; n <= 7; n++) {
         let x, y
@@ -207,9 +208,9 @@ export default function App() {
                 className={`dot ${path.includes(p) ? 'active' : ''}`}
                 style={{
                   background: p.color,
-                  left: `${p.x * 16.66 + 2}%`,
-                  top: `${p.y * 16.66 + 2}%`
-                }}
+                  '--x': p.x,
+                  '--y': p.y
+                } as React.CSSProperties}
                 onPointerDown={() => handleClick(p)}
               >
                 {p.number}
