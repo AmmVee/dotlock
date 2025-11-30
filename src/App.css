@@ -6,13 +6,12 @@ body {
   font-family: 'SF Pro Display', -apple-system, BlinkMacSystemFont, sans-serif;
   overflow: hidden;
   min-height: 100vh;
-  background: radial-gradient(circle at 50% -30%, #1a0033 0%, #000 70%);
 }
 
 .app {
   padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
   min-height: 100vh;
-  position: relative;
+  background: radial-gradient(circle at 50% -30%, #1a0033 0%, #000 70%);
 }
 
 /* ХЕДЕР */
@@ -21,12 +20,12 @@ body {
   justify-content: space-between;
   align-items: center;
   padding: 16px 24px;
-  background: rgba(10, 5, 30, 0.9);
+  background: rgba(10,5,30,0.9);
   backdrop-filter: blur(30px);
   border-radius: 30px;
   margin: 16px;
-  border: 2px solid rgba(138, 43, 226, 0.5);
-  box-shadow: 0 0 40px rgba(138, 43, 226, 0.3);
+  border: 2px solid rgba(138,43,226,0.5);
+  box-shadow: 0 0 40px rgba(138,43,226,0.3);
   font-weight: 800;
   font-size: 19px;
 }
@@ -34,7 +33,7 @@ body {
 /* МЕНЮ */
 .menu {
   text-align: center;
-  padding-top: 80px;
+  padding-top: 60px;
 }
 
 .menu h1 {
@@ -46,43 +45,24 @@ body {
   -webkit-background-clip: text;
   background-clip: text;
   color: transparent;
-  animation: glow 6s ease-in-out infinite;
 }
 
-@keyframes glow {
-  0%, 100% { filter: hue-rotate(0deg); }
-  50% { filter: hue-rotate(180deg); }
-}
-
-/* КНОПКИ */
-.play {
-  background: linear-gradient(135deg, #8a2be2, #ff00ff);
-  border: none;
-  padding: 20px 70px;
-  font-size: clamp(28px, 8vw, 36px);
-  font-weight: 900;
-  border-radius: 60px;
-  margin: 20px;
-  cursor: pointer;
-  box-shadow: 0 15px 40px rgba(138, 43, 226, 0.5);
-  transition: all 0.3s;
-}
-
-/* ПОЛЕ — АДАПТИВНОЕ ПОД ЛЮБОЙ ЭКРАН */
+/* ПОЛЕ — АДАПТИВНОЕ ПОД 6×9 СЕТКУ */
 .field-container {
   display: flex;
   justify-content: center;
   align-items: center;
   padding: 20px;
-  min-height: 60vh;
+  min-height: 65vh;
 }
 
+/* ПОЛЕ — РАЗМЕР ЗАВИСИТ ОТ КРУГОВ */
 .field {
   position: relative;
-  width: 90vw;
-  max-width: 390px;
-  height: 90vw;
-  max-height: 570px;
+  width: 90vmin;
+  height: 135vmin;
+  max-width: 420px;
+  max-height: 630px;
   background: rgba(5, 5, 25, 0.95);
   border-radius: 44px;
   overflow: hidden;
@@ -90,31 +70,41 @@ body {
   box-shadow: 0 0 80px rgba(138, 43, 226, 0.4);
 }
 
-/* ТОЧКИ — ИДЕАЛЬНЫЕ, БЕЗ ПЕРЕКРЫТИЙ */
+/* КРУГИ — ВСЕГДА КРУГЛЫЕ, РАЗМЕР ФИКСИРОВАННЫЙ */
 .dot {
   position: absolute;
-  width: 13%;
-  height: 13%;
+  width: 13.5%;
+  height: 13.5%;
   min-width: 48px;
   min-height: 48px;
+  max-width: 64px;
+  max-height: 64px;
   border-radius: 50%;
   display: flex;
   align-items: center;
   justify-content: center;
   font-weight: 900;
-  font-size: clamp(18px, 4vw, 24px);
+  font-size: clamp(18px, 4.5vmin, 28px);
   transition: all 0.35s cubic-bezier(0.34, 1.56, 0.64, 1);
   box-shadow: 0 6px 20px rgba(0,0,0,0.7), 0 0 30px currentColor;
   cursor: pointer;
   z-index: 10;
+  /* Сохраняем идеальную форму */
+  border-radius: 50%;
+  transform: translate(-50%, -50%);
 }
 
+/* ПОЗИЦИОНИРОВАНИЕ — ТОЧНО ПО СЕТКЕ 6×9 */
+.dot {
+  left: calc(var(--x, 0) * 16.66% + 8.33%);
+  top: calc(var(--y, 0) * 16.66% + 8.33%);
+}
+
+/* АКТИВНЫЕ КРУГИ — КРАСИВО И НЕ ПЕРЕКРЫВАЮТ */
 .dot.active {
-  transform: scale(1.6) !important; /* Было 1.75 — теперь аккуратно */
+  transform: translate(-50%, -50%) scale(1.65) !important;
   z-index: 999 !important;
-  box-shadow: 
-    0 0 50px currentColor,
-    0 0 80px currentColor; /* Меньше свечение — красивее */
+  box-shadow: 0 0 60px currentColor, 0 0 100px currentColor;
   filter: brightness(1.4);
 }
 
